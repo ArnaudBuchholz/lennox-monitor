@@ -14,3 +14,8 @@ npm-debug.log
 
 debug.log
 .env
+
+# Data
+
+data/*
+!data/README.md
