@@ -4,7 +4,9 @@ This tool leverages the [Lennox iComfort web API](https://www.myicomfort.com/) t
 
 ## Overview
 
-The tool will fetch the current activity of your system and dump a json report as well as consolidate relevant info in a `records.csv` file. Everything is stored under the `data` folder.
+The tool polls the current activity of your system and dumps a `json` report for each call.
+It also consolidates the relevant information in a `records.csv` file.
+Everything is stored under the `data` folder.
 
 ## Configuration
 
@@ -15,4 +17,5 @@ The following environment variables must be defined
 
 By default, the polling interval is every second but it can be changed with **LENNOX_DELAY** (in ms).
 
-It is recommended to use a [`.env`](https://www.npmjs.com/package/dotenv) file to store these settings and run the tool with [PM2](https://pm2.keymetrics.io/).
+It is recommended to use a [`.env`](https://www.npmjs.com/package/dotenv) file to store these settings
+and run the tool with [PM2](https://pm2.keymetrics.io/).
