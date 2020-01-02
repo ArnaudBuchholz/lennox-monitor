@@ -14,6 +14,13 @@ const DEFAULT_URL = 'https://www.myicomfort.com/Default.aspx'
 const DASHBOARD_URL = 'https://www.myicomfort.com/Dashboard.aspx'
 const READ_URL = `${DASHBOARD_URL}/NewGetManualInfo`
 
+let DELAY
+if (process.env.LENNOX_DELAY) {
+  DELAY = parseInt(process.env.LENNOX_DELAY, 10)
+} else {
+  DELAY = 60000
+}
+
 const verbose = process.argv.includes('-verbose')
 
 let ASPSessionID
@@ -133,18 +140,44 @@ async function connect () {
   }
 }
 
-connect().then(read).then(async response => {
+async function extract (response) {
   const date = new Date(response.headers.date)
   const z00 = value => value.toString().padStart(2, '0')
   const dayFolder = `${date.getFullYear()}.${z00(date.getMonth() + 1)}.${z00(date.getDate())}`
-  const dayFolderPath = path.join(__dirname, 'data', dayFolder)
-  await mkdirAsync(dayFolderPath, { recursive: true })
+  const dateFolderPath = path.join(__dirname, 'data', dayFolder, z00(date.getHours()))
+  await mkdirAsync(dateFolderPath, { recursive: true })
   const fileName = `${z00(date.getHours())}.${z00(date.getMinutes())}.${z00(date.getSeconds())}.json`
-  const filePath = path.join(dayFolderPath, fileName)
+  const filePath = path.join(dateFolderPath, fileName)
   if (verbose) {
     console.log(filePath)
   }
   const data = JSON.parse(JSON.parse(response.responseText).d)
   await writeFileAsync(filePath, JSON.stringify(data))
-  console.log(`${date.toISOString()},${data.Indoor_Temp}.${data.fraction_Temp},${data.Indoor_Humidity},${data.Heat_Set_Point},${data.Cool_Set_Point},${data.System_Status}`)
-})
+
+  const OpenWeatherUrl = process.env.OPENWEATHER_URL
+  let mainTemp = ''
+  let mainTempFeelLike = ''
+  if (OpenWeatherUrl) {
+    try {
+      const weatherData = JSON.parse((await gpf.http.get(OpenWeatherUrl)).responseText)
+      mainTemp = Math.floor(100 * weatherData.main.temp - 27315) / 100
+      mainTempFeelLike = Math.floor(100 * weatherData.main.feels_like - 27315) / 100
+    } catch (e) {
+      mainTemp = '-'
+      mainTempFeelLike = '-'
+    }
+  }
+
+  const record = `${date.toISOString()},${data.Indoor_Temp}.${data.fraction_Temp},${data.Indoor_Humidity},${data.Heat_Set_Point},${data.Cool_Set_Point},${data.System_Status},${mainTemp},${mainTempFeelLike}`
+  if (verbose) {
+    console.log(record)
+  }
+  await writeFileAsync(path.join(__dirname, 'data', 'records.csv'), record + '\n', { flag: 'a+' })
+  setTimeout(job, DELAY)
+}
+
+function job () {
+  read().then(extract)
+}
+
+connect().then(job)
