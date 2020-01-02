@@ -168,7 +168,10 @@ async function extract (response) {
     }
   }
 
-  const record = `${date.toISOString()},${data.Indoor_Temp}.${data.fraction_Temp},${data.Indoor_Humidity},${data.Heat_Set_Point},${data.Cool_Set_Point},${data.System_Status},${mainTemp},${mainTempFeelLike}`
+  const csvDate = `${date.getFullYear()}-${z00(date.getMonth() + 1)}-${z00(date.getDate())}`
+  + ` ${z00(date.getHours())}:${z00(date.getMinutes())}:${z00(date.getSeconds())}`
+
+  const record = `${csvDate},${data.Indoor_Temp}.${data.fraction_Temp},${data.Indoor_Humidity},${data.Heat_Set_Point},${data.Cool_Set_Point},${data.System_Status},${mainTemp},${mainTempFeelLike}`
   if (verbose) {
     console.log(record)
   }
