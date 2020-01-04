@@ -143,16 +143,18 @@ async function connect () {
 async function extract (response) {
   const date = new Date(response.headers.date)
   const z00 = value => value.toString().padStart(2, '0')
-  const dayFolder = `${date.getFullYear()}.${z00(date.getMonth() + 1)}.${z00(date.getDate())}`
-  const dateFolderPath = path.join(__dirname, 'data', dayFolder, z00(date.getHours()))
-  await mkdirAsync(dateFolderPath, { recursive: true })
-  const fileName = `${z00(date.getHours())}.${z00(date.getMinutes())}.${z00(date.getSeconds())}.json`
-  const filePath = path.join(dateFolderPath, fileName)
+  const dayName = `${date.getFullYear()}.${z00(date.getMonth() + 1)}.${z00(date.getDate())}`
+  const dayFolderPath = path.join(__dirname, 'data', dayName)
+
+  const jsonFolderPath = path.join(dayFolderPath, z00(date.getHours()))
+  await mkdirAsync(jsonFolderPath, { recursive: true })
+  const jsonFileName = `${z00(date.getHours())}.${z00(date.getMinutes())}.${z00(date.getSeconds())}.json`
+  const jsonFilePath = path.join(jsonFolderPath, jsonFileName)
   if (verbose) {
-    console.log(filePath)
+    console.log(jsonFilePath)
   }
   const data = JSON.parse(JSON.parse(response.responseText).d)
-  await writeFileAsync(filePath, JSON.stringify(data))
+  await writeFileAsync(jsonFilePath, JSON.stringify(data))
 
   const OpenWeatherUrl = process.env.OPENWEATHER_URL
   let mainTemp = ''
@@ -175,7 +177,7 @@ async function extract (response) {
   if (verbose) {
     console.log(record)
   }
-  await writeFileAsync(path.join(__dirname, 'data', 'records.csv'), record + '\n', { flag: 'a+' })
+  await writeFileAsync(path.join(dayFolderPath, 'records.csv'), record + '\n', { flag: 'a+' })
   setTimeout(job, DELAY)
 }
 
