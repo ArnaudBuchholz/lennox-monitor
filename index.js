@@ -6,8 +6,12 @@ const path = require('path')
 const fs = require('fs')
 const util = require('util')
 
+const statAsync = util.promisify(fs.stat)
 const writeFileAsync = util.promisify(fs.writeFile)
 const mkdirAsync = util.promisify(fs.mkdir)
+const readdirAsync = util.promisify(fs.readdir)
+const renameAsync = util.promisify(fs.rename)
+const readFileAsync = util.promisify(fs.readFile)
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36'
 const DEFAULT_URL = 'https://www.myicomfort.com/Default.aspx'
@@ -140,7 +144,7 @@ async function connect () {
   }
 }
 
-async function extract (response) {
+async function extract (response, live = true) {
   const date = new Date(response.headers.date)
   const z00 = value => value.toString().padStart(2, '0')
   const dayName = `${date.getFullYear()}.${z00(date.getMonth() + 1)}.${z00(date.getDate())}`
@@ -154,12 +158,14 @@ async function extract (response) {
     console.log(jsonFilePath)
   }
   const data = JSON.parse(JSON.parse(response.responseText).d)
-  await writeFileAsync(jsonFilePath, JSON.stringify(data))
+  if (live) {
+    await writeFileAsync(jsonFilePath, JSON.stringify(data))
+  }
 
   const OpenWeatherUrl = process.env.OPENWEATHER_URL
   let mainTemp = ''
   let mainTempFeelLike = ''
-  if (OpenWeatherUrl) {
+  if (OpenWeatherUrl && live) {
     try {
       const weatherData = JSON.parse((await gpf.http.get(OpenWeatherUrl)).responseText)
       mainTemp = Math.floor(100 * weatherData.main.temp - 27315) / 100
@@ -170,14 +176,37 @@ async function extract (response) {
     }
   }
 
-  const csvDate = `${date.getFullYear()}-${z00(date.getMonth() + 1)}-${z00(date.getDate())}`
-  + ` ${z00(date.getHours())}:${z00(date.getMinutes())}:${z00(date.getSeconds())}`
+  const record = {
+    day: `${date.getFullYear()}-${z00(date.getMonth() + 1)}-${z00(date.getDate())}`,
+    time: `${z00(date.getHours())}:${z00(date.getMinutes())}:${z00(date.getSeconds())}`,
+    temp: `${data.Indoor_Temp}.${data.fraction_Temp}`,
+    humidity: data.Indoor_Humidity,
+    heat_expected: data.Heat_Set_Point,
+    heat_step: data.TStatInfo_List[0].Heat_Set_Point,
+    cool_expected: data.Cool_Set_Point,
+    system_status: data.System_Status,
+    heating: data.System_Status === 'heating' ? 1 : 0,
+    ext_temp: mainTemp,
+    ext_feel: mainTempFeelLike
+  }
+  const header = Object.keys(record)
 
-  const record = `${csvDate},${data.Indoor_Temp}.${data.fraction_Temp},${data.Indoor_Humidity},${data.Heat_Set_Point},${data.Cool_Set_Point},${data.System_Status},${mainTemp},${mainTempFeelLike}`
   if (verbose) {
     console.log(record)
   }
-  await writeFileAsync(path.join(dayFolderPath, 'records.csv'), record + '\n', { flag: 'a+' })
+
+  const csvRecord = header
+    .map(name => record[name].toString().replace(/\./g, ','))
+    .join('\t')
+  const csvFileName = path.join(dayFolderPath, 'records.csv')
+
+  try {
+    await statAsync(csvFileName)
+  } catch (e) {
+    await writeFileAsync(csvFileName, header.join('\t') + '\n', { flag: 'a+' })
+  }
+
+  await writeFileAsync(csvFileName, csvRecord + '\n', { flag: 'a+' })
   setTimeout(job, DELAY)
 }
 
@@ -185,4 +214,37 @@ function job () {
   read().then(extract)
 }
 
-connect().then(job)
+async function replay (date) {
+  const baseFolder = `./data/${date}`
+  const baseDate = new Date(date.substring(0, 4), parseInt(date.substring(5, 7), 10) - 1, date.substring(8, 10), 0, 0, 0, 0)
+  console.log(`Replaying ${date}`)
+  try {
+    await renameAsync(`${baseFolder}/records.csv`, `${baseFolder}/records.${new Date().toISOString().replace(/:/g, '_')}.bak`)
+  } catch (e) {
+    console.error(e.toString())
+  }
+  const hours = (await readdirAsync(baseFolder)).filter(name => !name.includes('.')).sort()
+  for (const hour of hours) {
+    const logs = (await readdirAsync(`${baseFolder}/${hour}`)).sort()
+    for (const log of logs) {
+      const savedResponse = (await readFileAsync(`${baseFolder}/${hour}/${log}`)).toString()
+      baseDate.setHours(log.substring(0, 2))
+      baseDate.setMinutes(log.substring(3, 5))
+      baseDate.setSeconds(log.substring(6, 8))
+      const responseText = `{"d":"${savedResponse.replace(/"/g, '\\"')}"}`
+      await extract({
+        headers: {
+          date: baseDate
+        },
+        responseText
+      }, false)
+    }
+  }
+  console.log("done.")
+}
+
+if (process.argv.includes('-replay')) {
+  replay(process.argv.slice(2).filter(param => !param.startsWith('-'))[0])
+} else {
+  connect().then(job)
+}
