@@ -19,3 +19,8 @@ By default, the polling interval is every second but it can be changed with **LE
 
 It is recommended to use a [`.env`](https://www.npmjs.com/package/dotenv) file to store these settings
 and run the tool with [PM2](https://pm2.keymetrics.io/).
+
+## Assumptions
+
+This tool was developed to monitor a problem with my thermostat. My system owns only one zone, the script must be modified
+to consider more than that. The CSV is generated for a French locale (decimal separator is ',').
