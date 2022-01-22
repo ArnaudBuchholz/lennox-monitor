@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "standard --fix"
   },
   "repository": {
     "type": "git",
@@ -17,7 +18,11 @@
   },
   "homepage": "https://github.com/ArnaudBuchholz/lennox-monitor#readme",
   "dependencies": {
-    "dotenv": "^8.2.0",
-    "gpf-js": "^1.0.0"
+    "dotenv": "^14.2.0",
+    "got": "^12.0.1",
+    "reserve": "^1.12.1"
+  },
+  "devDependencies": {
+    "standard": "^16.0.4"
   }
 }
