@@ -1,10 +1,13 @@
-'use strict'
-
 import 'dotenv/config'
 import { connect, read } from './lennox.js'
 import { extract } from './extract.js'
 import { replay } from './replay.js'
+import reserve from 'reserve'
+import __dirname from './dirname.js'
+import { join } from 'path'
+import { perday } from './api/perday.js'
 
+const { check, serve, log } = reserve
 const DELAY = parseInt(process.env.LENNOX_DELAY || '60000', 10)
 
 async function main () {
@@ -23,6 +26,17 @@ async function main () {
       setTimeout(job, DELAY)
     }
     job()
+    const configuration = await check({
+      port: parseInt(process.env.LENNOX_PORT || '8080', 10),
+      mappings: [{
+        match: /^\/api\/(\d\d\d\d\d\d\d\d)/,
+        custom: perday
+      }, {
+        match: /^\/(.*)/,
+        file: join(__dirname, '$1')
+      }]
+    })
+    log(serve(configuration))
   }
 }
 
