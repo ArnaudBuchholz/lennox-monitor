@@ -1,5 +1,3 @@
-'use strict'
-
 import got from 'got'
 
 const verbose = process.argv.includes('-verbose')
