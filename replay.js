@@ -1,5 +1,3 @@
-'use strict'
-
 import { readdir, rename, readFile } from 'fs/promises'
 import { extract } from './extract.js'
 
