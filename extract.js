@@ -1,7 +1,7 @@
 import got from 'got'
 import { join } from 'path'
 import { mkdir, stat, writeFile } from 'fs/promises'
-import __dirname from './dirname.js'
+import basedir from './basedir.js'
 
 const verbose = process.argv.includes('-verbose')
 
@@ -9,7 +9,7 @@ export async function extract (response, live = true) {
   const date = new Date(response.headers.date)
   const z00 = value => value.toString().padStart(2, '0')
   const dayName = `${date.getFullYear()}.${z00(date.getMonth() + 1)}.${z00(date.getDate())}`
-  const dayFolderPath = join(__dirname, 'data', dayName)
+  const dayFolderPath = join(basedir, 'data', dayName)
 
   const jsonFolderPath = join(dayFolderPath, z00(date.getHours()))
   await mkdir(jsonFolderPath, { recursive: true })
