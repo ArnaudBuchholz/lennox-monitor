@@ -3,9 +3,10 @@ import { connect, read } from './lennox.js'
 import { extract } from './extract.js'
 import { replay } from './replay.js'
 import reserve from 'reserve'
-import __dirname from './dirname.js'
+import basedir from './basedir.js'
 import { join } from 'path'
 import { perday } from './api/perday.js'
+import { days } from './api/days.js'
 
 const { check, serve, log } = reserve
 const DELAY = parseInt(process.env.LENNOX_DELAY || '60000', 10)
@@ -32,8 +33,11 @@ async function main () {
         match: /^\/api\/(\d\d\d\d\d\d\d\d)/,
         custom: perday
       }, {
+        match: /^\/api\/days/,
+        custom: days
+      }, {
         match: /^\/(.*)/,
-        file: join(__dirname, '$1')
+        file: join(basedir, 'web', '$1')
       }]
     })
     log(serve(configuration))
