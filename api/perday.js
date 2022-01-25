@@ -1,10 +1,11 @@
-import __dirname from '../dirname.js'
+import basedir from '../basedir.js'
 import { join } from 'path'
 import { stat, readFile } from 'fs/promises'
+import { sendJSON } from './sendJSON.js'
 
 export async function perday (request, response, param) {
   const [year, month, day] = /(\d\d\d\d)(\d\d)(\d\d)/.exec(param).slice(1)
-  const csvFileName = join(__dirname, 'data', `${year}.${month}.${day}`, 'records.csv')
+  const csvFileName = join(basedir, 'data', `${year}.${month}.${day}`, 'records.csv')
   await stat(csvFileName)
   const lines = (await readFile(csvFileName))
     .toString()
@@ -36,10 +37,5 @@ export async function perday (request, response, param) {
         }, [])
       )
     )
-  const json = JSON.stringify(records)
-  response.writeHead(200, {
-    'content-type': 'application/json',
-    'content-length': json.length
-  })
-  response.end(json)
+  sendJSON(response, records)
 }
