@@ -1,0 +1,12 @@
+.charts {
+  height: 80%;
+}
+
+.summary {
+  height: 20%;
+}
+
+.summary .date {
+  font-size: 10vh;
+  text-align: center;
+}
