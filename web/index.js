@@ -3,6 +3,7 @@ function bind (root, initialData) {
 
   const data = new Proxy(initialData, {
     has (obj, prop) {
+      // because the with keyword test if property exists
       return typeof prop === 'string' && !prop.match(/^__.*__$/)
     },
     get (obj, prop) {
