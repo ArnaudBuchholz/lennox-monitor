@@ -1,22 +1,23 @@
 export function punybind (root, initialData) {
   const bindings = []
 
-  let refreshTimeout
-
-  function doRefresh () {
-    if (refreshTimeout) {
-      clearTimeout(refreshTimeout)
+  function refresh (force = false) {
+    function debounced () {
+      if (refresh.timeout) {
+        clearTimeout(refresh.timeout)
+        delete refresh.timeout
+      }
+      const changes = []
+      bindings.forEach(binding => binding(changes))
+      if (changes.length) {
+        changes.forEach(change => change())
+      }
     }
-    const changes = []
-    bindings.forEach(binding => binding(changes))
-    if (changes.length) {
-      changes.forEach(change => change())
-    }
-  }
 
-  function refresh () {
-    if (!refreshTimeout) {
-      refreshTimeout = setTimeout(doRefresh, 0)
+    if (force) {
+      debounced()
+    } else if (!refresh.timeout) {
+      refresh.timeout = setTimeout(debounced, 0)
     }
   }
 
@@ -25,8 +26,11 @@ export function punybind (root, initialData) {
       return obj[prop] ?? ''
     },
     set (obj, prop, value) {
-      obj[prop] = value
-      refresh()
+      const previousValue = obj[prop]
+      if (previousValue !== value) { // hash ?
+        obj[prop] = value
+        refresh()
+      }
       return true
     }
   })
