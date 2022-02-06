@@ -73,7 +73,9 @@ export function punybind (root, initialData) {
           bindNodeValue(att, context)
         })
       if (attributes.includes('{{for}}')) {
-        // 
+        const template = node.ownerDocument.createElement('template')
+        node.parentNode.insertBefore(template, node)
+        template.appendChild(node)
       }
       [].slice.call(node.childNodes).forEach(child => walk(child, context))
     }
