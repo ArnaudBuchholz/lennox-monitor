@@ -1,5 +1,21 @@
 export function punybind (root, initialData) {
+
   const bindings = []
+
+  const isCSPon = (function () {
+    try {
+      new Function('return 0')
+      return false
+    } catch (e) {
+      return true
+    }
+  }())
+
+  const compiled = {}
+
+  async function compile () {
+
+  }
 
   function refresh (force = false) {
     function debounced () {
