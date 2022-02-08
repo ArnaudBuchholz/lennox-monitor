@@ -41,9 +41,14 @@ export async function punybind (root, initialData) {
     await refresh[$promise]
   }
 
+  const $raw = Symbol('raw')
+
   function observe (object) {
     return new Proxy(object, {
       get (obj, prop) {
+        if (prop === $raw) {
+          return object
+        }
         const value = obj[prop] ?? ''
         const type = typeof value
         if (type === 'function') {
@@ -123,15 +128,11 @@ export async function punybind (root, initialData) {
       let index = 0
       for await (const value of newValues) {
         const instance = parent.insertBefore(template.cloneNode(true), placeholder)
-        const subContext = Object.create(context)
+        const subContext = Object.create(context[$raw])
         subContext[valueName] = value
-        subContext[indexName] = index
+        subContext[indexName || '__index__'] = index
         const bindings = await parse(instance, observe(subContext))
-        iterations.push({
-          instance,
-          value,
-          bindings
-        })
+        iterations.push({ instance, value, bindings })
         ++index
       }
 
