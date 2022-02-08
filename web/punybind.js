@@ -1,21 +1,18 @@
-export function punybind (root, initialData) {
+export async function punybind (root, initialData) {
+  // const isCSPon = (function () {
+  //   try {
+  //     new Function('return 0')
+  //     return false
+  //   } catch (e) {
+  //     return true
+  //   }
+  // }())
+
+  async function compile (source, ...params) {
+    return new Function(...params, `return function(${params.join(',')}) { ${source} }`)() //eslint-disable-line
+  }
 
   const bindings = []
-
-  const isCSPon = (function () {
-    try {
-      new Function('return 0')
-      return false
-    } catch (e) {
-      return true
-    }
-  }())
-
-  const compiled = {}
-
-  async function compile () {
-
-  }
 
   function refresh (force = false) {
     function debounced () {
@@ -37,70 +34,91 @@ export function punybind (root, initialData) {
     }
   }
 
-  const data = new Proxy(initialData, {
-    get (obj, prop) {
-      return obj[prop] ?? ''
-    },
-    set (obj, prop, value) {
-      const previousValue = obj[prop]
-      if (previousValue !== value) { // hash ?
-        obj[prop] = value
-        refresh()
+  function observe (object) {
+    return new Proxy(object, {
+      get (obj, prop) {
+        const value = obj[prop] ?? ''
+        const type = typeof value
+        if (type === 'function') {
+          const before = JSON.stringify(obj)
+          return function () {
+            const result = value.apply(obj, arguments)
+            if (JSON.stringify(obj) !== before) {
+              refresh()
+            }
+            return result
+          }
+        }
+        if (type === 'object') {
+          return observe(value)
+        }
+        return value
+      },
+      set (obj, prop, value) {
+        const previousValue = obj[prop]
+        if (previousValue !== value) {
+          obj[prop] = value
+          refresh()
+        }
+        return true
       }
-      return true
-    }
-  })
+    })
+  }
+
+  const data = observe(initialData)
 
   const ELEMENT_NODE = 1
   const TEXT_NODE = 3
 
-  function bindNodeValue (node, context) {
+  async function bindNodeValue (node, context) {
     const parsed = node.nodeValue.split(/{{((?:[^}]|}[^}])*)}}/)
     if (parsed.length > 1) {
-      const code = `
-        let __previousValue__
-        return function (__changes__) {
-          with (__data__) {
-            with (__context__) {
-              let __value__
-              try {
-                __value__ = [__PARSED__].join('')
-              } catch (e) {
-                __value__ = ''
-              }
-              if (__value__ !== __previousValue__) {
-                __previousValue__ = __value__
-                __changes__.push(() => { __node__.nodeValue = __value__ })
-              }
-            }
-          }
-        }`
-        .replace('__PARSED__', parsed.map((expr, idx) => idx % 2 ? expr : `\`${expr}\``).join(','))
-      bindings.push(new Function('__node__', '__data__', '__context__', code)(node, data, context))
+      const expression = await compile(`with (__context__) { return [
+        ${parsed.map((expr, idx) => idx % 2 ? expr : `\`${expr}\``).join(',')}
+      ].join('') }`, '__context__')
+      let previousValue
+      function refreshNodeValue (changes) {
+        let value
+        try {
+          value = expression(context)
+        } catch (e) {
+          value = ''
+        }
+        if (value !== previousValue) {
+          previousValue = value
+          changes.push(() => { node.nodeValue = value })
+        }
+      }
+      bindings.push(refreshNodeValue)
     }
   }
 
-  function walk (node, context) {
+  function bindIterator (template) {
+    // bindings.push(iterate.bind(null, template))
+  }
+
+  async function parse (node, context) {
+    const promises = []
     if (node.nodeType === TEXT_NODE) {
-      bindNodeValue(node, context)
+      promises.push(bindNodeValue(node, context))
     }
     if (node.nodeType === ELEMENT_NODE) {
       const attributes = node.getAttributeNames()
-      attributes
+      promises.push(...attributes
         .filter(name => !name.match(/^{{\w+}}$/))
-        .forEach(name => {
-          const att = node.getAttributeNode(name)
-          bindNodeValue(att, context)
-        })
+        .map(name => bindNodeValue(node.getAttributeNode(name), context))
+      )
       if (attributes.includes('{{for}}')) {
         const template = node.ownerDocument.createElement('template')
         node.parentNode.insertBefore(template, node)
         template.appendChild(node)
+        promises.push(bindIterator(template))
       }
-      [].slice.call(node.childNodes).forEach(child => walk(child, context))
+      promises.push(...[].slice.call(node.childNodes).map(child => parse(child, context)))
     }
+    return await Promise.all(promises)
   }
-  walk(root, {})
+  await parse(root, data)
 
   refresh()
 
