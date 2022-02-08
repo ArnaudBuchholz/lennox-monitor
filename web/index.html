@@ -10,7 +10,7 @@
         <figcaption>Temperatures</figcaption>
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100%" height="20%" aria-labelledby="title" role="img">
           <title id="title">Temperatures</title>
-          <rect {{for}}="temp,index" {{in}}="temps" x="{{ index * 4 }}%" y="50%" width="4%" height="{{ 50 * Math.floor(temp.real / 30) }}%"></rect>
+          <rect {{for}}="temp,index" {{of}}="temps" x="{{ index * 4 }}%" y="50%" width="4%" height="{{ 50 * Math.floor(temp.real / 30) }}%"></rect>
         </svg>
       </figure>
     </div>
