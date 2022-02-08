@@ -12,26 +12,33 @@ export async function punybind (root, initialData) {
     return new Function(...params, `return function(${params.join(',')}) { ${source} }`)() //eslint-disable-line
   }
 
-  const bindings = []
+  const $promise = Symbol('promise')
+  const $resolver = Symbol('resolver')
+  const $timeout = Symbol('timeout')
 
-  function refresh (force = false) {
-    function debounced () {
-      if (refresh.timeout) {
-        clearTimeout(refresh.timeout)
-        delete refresh.timeout
+  async function refresh (force = false) {
+    async function debounced () {
+      if (refresh[$timeout]) {
+        clearTimeout(refresh[$timeout])
+        delete refresh[$timeout]
       }
       const changes = []
-      bindings.forEach(binding => binding(changes))
+      await Promise.all(bindings.map(binding => binding(changes)))
       if (changes.length) {
-        changes.forEach(change => change())
+        await Promise.all(changes.map(change => change()))
       }
+      delete refresh[$promise]
+      refresh[$resolver]()
     }
 
     if (force) {
-      debounced()
-    } else if (!refresh.timeout) {
-      refresh.timeout = setTimeout(debounced, 0)
+      return await debounced()
     }
+    if (!refresh[$promise]) {
+      refresh[$promise] = new Promise(resolve => { refresh[$resolver] = resolve })
+      refresh[$timeout] = setTimeout(debounced, 0)
+    }
+    await refresh[$promise]
   }
 
   function observe (object) {
@@ -67,17 +74,16 @@ export async function punybind (root, initialData) {
 
   const data = observe(initialData)
 
-  const ELEMENT_NODE = 1
-  const TEXT_NODE = 3
-
   async function bindNodeValue (node, context) {
     const parsed = node.nodeValue.split(/{{((?:[^}]|}[^}])*)}}/)
     if (parsed.length > 1) {
       const expression = await compile(`with (__context__) { return [
         ${parsed.map((expr, idx) => idx % 2 ? expr : `\`${expr}\``).join(',')}
       ].join('') }`, '__context__')
+
       let previousValue
-      function refreshNodeValue (changes) {
+
+      return function refreshNodeValue (changes) {
         let value
         try {
           value = expression(context)
@@ -89,36 +95,89 @@ export async function punybind (root, initialData) {
           changes.push(() => { node.nodeValue = value })
         }
       }
-      bindings.push(refreshNodeValue)
     }
   }
 
-  function bindIterator (template) {
-    // bindings.push(iterate.bind(null, template))
-  }
+  async function bindIterator (settings, context) {
+    const { placeholder } = settings
+    const parent = placeholder.parentNode
+    const template = placeholder.firstChild
+    const [valueName, indexName] = settings.for.split(',')
+    const dataMember = settings.of
 
-  async function parse (node, context) {
-    const promises = []
-    if (node.nodeType === TEXT_NODE) {
-      promises.push(bindNodeValue(node, context))
-    }
-    if (node.nodeType === ELEMENT_NODE) {
-      const attributes = node.getAttributeNames()
-      promises.push(...attributes
-        .filter(name => !name.match(/^{{\w+}}$/))
-        .map(name => bindNodeValue(node.getAttributeNode(name), context))
-      )
-      if (attributes.includes('{{for}}')) {
-        const template = node.ownerDocument.createElement('template')
-        node.parentNode.insertBefore(template, node)
-        template.appendChild(node)
-        promises.push(bindIterator(template))
+    const iterations = []
+
+    return async function iterate (changes) {
+      let newValues
+      try {
+        newValues = [...context[dataMember]]
+      } catch (e) {
+        newValues = []
       }
-      promises.push(...[].slice.call(node.childNodes).map(child => parse(child, context)))
+      if (newValues.length === iterations.length && newValues.every((value, index) => value === iterations[index].value)) {
+        return // No significant change
+      }
+      // First implementation (remove all & replace)
+      iterations.forEach(({ instance }) => parent.removeChild(instance))
+      iterations.length = 0
+      let index = 0
+      for await (const value of newValues) {
+        const instance = parent.insertBefore(template.cloneNode(true), placeholder)
+        const subContext = Object.create(context)
+        subContext[valueName] = value
+        subContext[indexName] = index
+        const bindings = await parse(instance, observe(subContext))
+        iterations.push({
+          instance,
+          value,
+          bindings
+        })
+        ++index
+      }
+
+      await Promise.all(iterations.map(({ bindings }) => Promise.all(bindings.map(binding => binding(changes)))))
     }
-    return await Promise.all(promises)
   }
-  await parse(root, data)
+
+  async function parse (root, context) {
+    const ELEMENT_NODE = 1
+    const TEXT_NODE = 3
+    const promises = []
+  
+    function traverse (node) {
+      if (node.nodeType === TEXT_NODE) {
+        promises.push(bindNodeValue(node, context))
+      }
+      if (node.nodeType === ELEMENT_NODE) {
+        const attributes = node.getAttributeNames()
+        if (attributes.includes('{{for}}')) {
+          const placeholder = node.ownerDocument.createElement('template')
+          node.parentNode.insertBefore(placeholder, node)
+          placeholder.appendChild(node)
+          const settings = {
+            placeholder
+          }
+          'for,of'.split(',').forEach(name => {
+            settings[name] = node.getAttribute(`{{${name}}}`)
+            node.removeAttribute(`{{${name}}}`)
+          })
+          promises.push(bindIterator(settings, context))
+        } else {
+          promises.push(...attributes
+            .filter(name => !name.match(/^{{\w+}}$/))
+            .map(name => bindNodeValue(node.getAttributeNode(name), context))
+          );
+          [].slice.call(node.childNodes).forEach(traverse)
+        }
+      }
+    }
+
+    traverse(root)
+
+    return Promise.all(promises)
+      .then(bindings => bindings.filter(binding => !!binding))
+  }
+  const bindings = await parse(root, data)
 
   refresh()
 
