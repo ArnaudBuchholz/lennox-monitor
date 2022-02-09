@@ -144,7 +144,7 @@ export async function punybind (root, initialData) {
     const ELEMENT_NODE = 1
     const TEXT_NODE = 3
     const promises = []
-  
+
     function traverse (node) {
       if (node.nodeType === TEXT_NODE) {
         promises.push(bindNodeValue(node, context))
